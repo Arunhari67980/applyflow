@@ -15,10 +15,29 @@ type HistoryItem = { id: string; previousStatus?: string; newStatus: string; not
 
 async function api(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem('applyflow_token');
-  const response = await fetch(API + path, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } });
-  if (response.status === 401) { localStorage.removeItem('applyflow_token'); throw new Error('SESSION_EXPIRED'); }
-  if (!response.ok) { const body = await response.json().catch(() => null); throw new Error(body?.message || 'Request failed'); }
-  return response.status === 204 ? null : response.json();
+  console.log(`[ApplyFlow API Request] ${options.method || 'GET'} ${API + path}`);
+  try {
+    const response = await fetch(API + path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem('applyflow_token');
+      throw new Error('SESSION_EXPIRED');
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.message || `Request failed with status ${response.status}`);
+    }
+    return response.status === 204 ? null : response.json();
+  } catch (err) {
+    console.error(`[ApplyFlow API Error] ${path}:`, err);
+    throw err;
+  }
 }
 
 const emptyForm = (): ApplicationForm => ({ companyName: '', jobTitle: '', source: 'COMPANY_WEBSITE', jobType: 'FULL_TIME', workMode: 'HYBRID', appliedDate: new Date().toISOString().slice(0, 10), priority: 'MEDIUM', status: 'APPLIED' });
@@ -28,6 +47,7 @@ function App() {
   const [logged, setLogged] = useState(Boolean(localStorage.getItem('applyflow_token')));
   const [register, setRegister] = useState(false);
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null); const [applications, setApplications] = useState<Application[]>([]);
   const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [showForm, setShowForm] = useState(false); const [form, setForm] = useState<ApplicationForm>(emptyForm); const [saving, setSaving] = useState(false); const [section, setSection] = useState('Overview');
   const [followUps, setFollowUps] = useState<FollowUp[]>([]); const [interviews, setInterviews] = useState<Interview[]>([]); const [notifications, setNotifications] = useState<Notification[]>([]); const [history, setHistory] = useState<HistoryItem[]>([]); const [editingId, setEditingId] = useState<string | null>(null);
@@ -43,13 +63,59 @@ function App() {
       setFollowUps(nextFollowUps); setInterviews(nextInterviews); setNotifications(nextNotifications);
     } finally { setLoading(false); }
   }
-  useEffect(() => { if (logged) loadDashboard().catch((reason: Error) => { if (reason.message === 'SESSION_EXPIRED') setLogged(false); else setError(reason.message); }); }, [logged]);
+
+  useEffect(() => {
+    if (logged) {
+      loadDashboard().catch((reason: Error) => {
+        console.error('[ApplyFlow Dashboard Load Error]:', reason);
+        if (reason.message === 'SESSION_EXPIRED') {
+          setError('Session expired or unauthorized. Please sign in again.');
+          setLogged(false);
+        } else {
+          setError(reason.message);
+        }
+      });
+    }
+  }, [logged]);
 
   async function submitAuth(event: React.FormEvent) {
-    event.preventDefault(); setError('');
-    try { const response = await api(register ? '/auth/register' : '/auth/login', { method: 'POST', body: JSON.stringify(register ? { name, email, password } : { email, password }) }); localStorage.setItem('applyflow_token', response.token); setLogged(true); }
-    catch (reason) { setError((reason as Error).message); }
+    event.preventDefault();
+    setError('');
+
+    const trimmedEmail = email.trim();
+    const trimmedName = name.trim();
+
+    if (!trimmedEmail || !password || (register && !trimmedName)) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const response = await api(register ? '/auth/register' : '/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(register ? { name: trimmedName, email: trimmedEmail, password } : { email: trimmedEmail, password }),
+      });
+      console.log('[ApplyFlow Auth Success]', response);
+      localStorage.setItem('applyflow_token', response.token);
+      setLogged(true);
+    } catch (reason: any) {
+      console.error('[ApplyFlow Auth Error]:', reason);
+      if (reason.message === 'Failed to fetch' || reason.name === 'TypeError') {
+        setError(`Cannot reach backend server (${API}). If you are running locally, make sure Spring Boot is running on port 8080.`);
+      } else {
+        setError(reason.message || 'Authentication failed. Please verify your credentials.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
   }
+
   async function addApplication(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setError('');
     try { await api(editingId ? `/applications/${editingId}` : '/applications', { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(form) }); setForm(emptyForm()); setEditingId(null); setShowForm(false); await loadDashboard(); }
@@ -68,7 +134,72 @@ function App() {
   async function addInterview(event: React.FormEvent) { event.preventDefault(); setSaving(true); try { await api('/interviews', { method: 'POST', body: JSON.stringify({ ...interviewForm, scheduledAt: new Date(interviewForm.scheduledAt).toISOString(), applicationId: interviewForm.applicationId || null }) }); setInterviews(await api('/interviews')); setInterviewForm({ ...interviewForm, scheduledAt: '', roundName: '', meetingLink: '', notes: '', applicationId: '' }); await loadDashboard(); } catch (reason) { setError((reason as Error).message); } finally { setSaving(false); } }
   async function cancelInterview(id: string) { try { await api(`/interviews/${id}/cancel`, { method: 'PATCH' }); setInterviews(await api('/interviews')); await loadDashboard(); } catch (reason) { setError((reason as Error).message); } }
 
-  if (!logged) return <main className="auth"><section className="auth-card"><div className="brand"><span>AF</span><strong>ApplyFlow</strong></div><div className="auth-kicker">YOUR CAREER COMMAND CENTER</div><h1>{register ? 'Create your workspace' : 'Welcome back'}</h1><p className="muted">{register ? 'Organize every opportunity in one calm workspace.' : 'Keep your job search moving with clarity.'}</p><form onSubmit={submitAuth}>{register && <label>Name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Password<input type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <div className="error">{error}</div>}<button>{register ? 'Create account' : 'Sign in'} <ChevronRight size={16} /></button></form><button className="link" onClick={() => { setRegister(!register); setError(''); }}>{register ? 'Already have an account? Sign in' : 'New to ApplyFlow? Create an account'}</button></section></main>;
+  if (!logged) {
+    return (
+      <main className="auth">
+        <section className="auth-card">
+          <div className="brand">
+            <span>AF</span>
+            <strong>ApplyFlow</strong>
+          </div>
+          <div className="auth-kicker">YOUR CAREER COMMAND CENTER</div>
+          <h1>{register ? 'Create your workspace' : 'Welcome back'}</h1>
+          <p className="muted">
+            {register ? 'Organize every opportunity in one calm workspace.' : 'Keep your job search moving with clarity.'}
+          </p>
+          <form onSubmit={submitAuth}>
+            {register && (
+              <label>
+                Name
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Your full name"
+                  required
+                />
+              </label>
+            )}
+            <label>
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@domain.com"
+                required
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="At least 8 characters"
+                required
+              />
+            </label>
+            {error && <div className="error">{error}</div>}
+            <button disabled={authLoading}>
+              {authLoading ? (register ? 'Creating account…' : 'Signing in…') : (register ? 'Create account' : 'Sign in')}{' '}
+              <ChevronRight size={16} />
+            </button>
+          </form>
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              setRegister(!register);
+              setError('');
+            }}
+          >
+            {register ? 'Already have an account? Sign in' : 'New to ApplyFlow? Create an account'}
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   const navItems: [string, React.ComponentType<{ size?: number }>][] = [['Overview', LayoutDashboard], ['Applications', BriefcaseBusiness], ['Follow-ups', CheckCircle2], ['Interviews', CalendarDays], ['Analytics', BarChart3]];
   return <div className="shell"><aside><div className="brand"><span>AF</span><strong>ApplyFlow</strong></div><p className="workspace-label">YOUR WORKSPACE</p><nav>{navItems.map(([item, Icon]) => <button key={item} className={section === item ? 'active' : ''} onClick={() => { setSection(item); setError(''); }}><Icon size={17} />{item}</button>)}</nav><div className="sidebar-footer"><div className="profile"><UserRound size={16} /><span>Personal workspace</span></div><button className="logout" onClick={() => { localStorage.removeItem('applyflow_token'); setLogged(false); }}><LogOut size={16} />Log out</button></div></aside>
