@@ -3,7 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { BarChart3, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronRight, Download, LayoutDashboard, LogOut, Plus, Search, Sparkles, Target, UserRound } from 'lucide-react';
 import './styles.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const API = import.meta.env.VITE_API_URL || (
+  typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+    ? 'https://applyflow-api-yiet.onrender.com/api/v1'
+    : 'http://localhost:8080/api/v1'
+);
 
 type Dashboard = { totalApplications: number; last7Days: number; last30Days: number; byStatus: Record<string, number>; upcomingInterviews: number; pendingFollowUps: number; overdueFollowUps: number; interviewRate: number; offerRate: number };
 type Application = { id: string; companyName: string; jobTitle: string; status: string; priority: string; source: string; appliedDate: string; jobType: string; workMode: string };
