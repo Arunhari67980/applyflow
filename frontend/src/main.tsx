@@ -7,10 +7,10 @@ import {
   CheckCircle2,
   ChevronRight,
   Download,
-  Github,
+  ExternalLink,
   Globe,
   LayoutDashboard,
-  Linkedin,
+  Link2,
   LogOut,
   Plus,
   Save,
@@ -108,10 +108,27 @@ function App() {
       ]);
       setDashboard(nextDashboard);
       setApplications(applicationPage.content);
-      if (nextProfile) setProfile(nextProfile);
-      const [nextFollowUps, nextInterviews, nextNotifications] = await Promise.all([api('/follow-ups'), api('/interviews'), api('/notifications')]);
-      setFollowUps(nextFollowUps); setInterviews(nextInterviews); setNotifications(nextNotifications);
-    } finally { setLoading(false); }
+      if (nextProfile) {
+        setProfile(nextProfile);
+        try { localStorage.setItem('applyflow_profile', JSON.stringify(nextProfile)); } catch (_) {}
+      } else {
+        try {
+          const cached = localStorage.getItem('applyflow_profile');
+          if (cached) setProfile(JSON.parse(cached));
+        } catch (_) {}
+      }
+
+      const [nextFollowUps, nextInterviews, nextNotifications] = await Promise.all([
+        api('/follow-ups'),
+        api('/interviews'),
+        api('/notifications'),
+      ]);
+      setFollowUps(nextFollowUps);
+      setInterviews(nextInterviews);
+      setNotifications(nextNotifications);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -153,6 +170,19 @@ function App() {
       });
       console.log('[ApplyFlow Auth Success]', response);
       localStorage.setItem('applyflow_token', response.token);
+
+      const savedProfile = localStorage.getItem('applyflow_profile');
+      if (!savedProfile) {
+        const initProfile: Profile = {
+          userId: response.userId || 'current',
+          name: response.name || (register ? trimmedName : 'Candidate'),
+          email: response.email || trimmedEmail,
+          preferredWorkMode: 'HYBRID',
+        };
+        localStorage.setItem('applyflow_profile', JSON.stringify(initProfile));
+        setProfile(initProfile);
+      }
+
       setLogged(true);
     } catch (reason: any) {
       console.error('[ApplyFlow Auth Error]:', reason);
@@ -191,9 +221,11 @@ function App() {
     try {
       const res = await api('/profile', { method: 'PUT', body: JSON.stringify(data) });
       setProfile(res);
-      setProfileSuccess('Profile updated successfully!');
+      try { localStorage.setItem('applyflow_profile', JSON.stringify(res)); } catch (_) {}
+      setProfileSuccess('Profile saved successfully to your database!');
       setTimeout(() => setProfileSuccess(''), 4000);
     } catch (reason: any) {
+      console.error('[ApplyFlow Profile Save Error]:', reason);
       setError(reason.message || 'Failed to update profile');
     } finally {
       setProfileSaving(false);
@@ -603,12 +635,12 @@ function ProfilePanel({
             <div className="profile-hero-links">
               {formData.linkedinUrl && (
                 <a href={formData.linkedinUrl} target="_blank" rel="noreferrer">
-                  <Linkedin size={14} /> LinkedIn
+                  <Link2 size={14} /> LinkedIn
                 </a>
               )}
               {formData.githubUrl && (
                 <a href={formData.githubUrl} target="_blank" rel="noreferrer">
-                  <Github size={14} /> GitHub
+                  <ExternalLink size={14} /> GitHub
                 </a>
               )}
               {formData.portfolioUrl && (
