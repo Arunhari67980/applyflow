@@ -62,3 +62,10 @@ class NotificationController {
 record NotificationView(UUID id,String message,Instant createdAt,Instant readAt){
   static NotificationView from(Notification n){return new NotificationView(n.id,n.message,n.createdAt,n.readAt);}
 }
+
+@RestController @RequestMapping("/api/v1/profile")
+class ProfileController {
+  private final ProfileService service; ProfileController(ProfileService s){service=s;}
+  @GetMapping ProfileResponse get(){return service.get();}
+  @PutMapping ProfileResponse update(@Valid @RequestBody ProfileRequest request){return service.update(request);}
+}

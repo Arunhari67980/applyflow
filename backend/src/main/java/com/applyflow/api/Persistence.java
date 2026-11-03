@@ -22,3 +22,6 @@ interface NotificationRepository extends JpaRepository<Notification,UUID> {
   Optional<Notification> findByIdAndUserId(UUID id, UUID userId);
   boolean existsByFollowUpId(UUID followUpId);
 }
+interface ProfileRepository extends JpaRepository<UserProfile, UUID> {
+  Optional<UserProfile> findByUserId(UUID userId);
+}

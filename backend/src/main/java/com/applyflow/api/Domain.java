@@ -66,3 +66,29 @@ class Notification {
   @OneToOne(fetch=FetchType.LAZY) @JoinColumn(name="follow_up_id",unique=true) FollowUp followUp; String message; Instant readAt; Instant createdAt;
   protected Notification() {}
 }
+
+@Entity @Table(name="user_profile")
+class UserProfile {
+  @Id UUID id;
+  @OneToOne(fetch=FetchType.LAZY) @JoinColumn(name="user_id", nullable=false, unique=true) User user;
+  String headline;
+  String phone;
+  String location;
+  @Column(columnDefinition="TEXT") String bio;
+  @Column(name="target_role") String targetRole;
+  @Column(name="target_salary") String targetSalary;
+  @Column(name="experience_years") Integer experienceYears;
+  @Column(columnDefinition="TEXT") String skills;
+  @Column(name="linkedin_url") String linkedinUrl;
+  @Column(name="github_url") String githubUrl;
+  @Column(name="portfolio_url") String portfolioUrl;
+  @Enumerated(EnumType.STRING) @Column(name="preferred_work_mode") WorkMode preferredWorkMode;
+  @Column(name="updated_at", nullable=false) Instant updatedAt;
+
+  protected UserProfile() {}
+  UserProfile(User user) {
+    this.id = UUID.randomUUID();
+    this.user = user;
+    this.updatedAt = Instant.now();
+  }
+}

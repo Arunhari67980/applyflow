@@ -1,6 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BarChart3, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronRight, Download, LayoutDashboard, LogOut, Plus, Search, Sparkles, Target, UserRound } from 'lucide-react';
+import {
+  BarChart3,
+  BriefcaseBusiness,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Download,
+  Github,
+  Globe,
+  LayoutDashboard,
+  Linkedin,
+  LogOut,
+  Plus,
+  Save,
+  Search,
+  Sparkles,
+  Target,
+  UserRound,
+} from 'lucide-react';
 import './styles.css';
 
 const API = import.meta.env.VITE_API_URL || (
@@ -16,6 +34,25 @@ type FollowUp = { id: string; applicationId?: string; dueDate: string; type: str
 type Interview = { id: string; applicationId?: string; scheduledAt: string; roundName: string; type: string; meetingLink?: string; cancelled: boolean };
 type Notification = { id: string; message: string; createdAt: string; readAt?: string };
 type HistoryItem = { id: string; previousStatus?: string; newStatus: string; note?: string; changedAt: string };
+type Profile = {
+  id?: string;
+  userId: string;
+  name: string;
+  email: string;
+  headline?: string;
+  phone?: string;
+  location?: string;
+  bio?: string;
+  targetRole?: string;
+  targetSalary?: string;
+  experienceYears?: number;
+  skills?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
+  preferredWorkMode?: string;
+  updatedAt?: string;
+};
 
 async function api(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem('applyflow_token');
@@ -53,6 +90,9 @@ function App() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null); const [applications, setApplications] = useState<Application[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState('');
   const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [showForm, setShowForm] = useState(false); const [form, setForm] = useState<ApplicationForm>(emptyForm); const [saving, setSaving] = useState(false); const [section, setSection] = useState('Overview');
   const [followUps, setFollowUps] = useState<FollowUp[]>([]); const [interviews, setInterviews] = useState<Interview[]>([]); const [notifications, setNotifications] = useState<Notification[]>([]); const [history, setHistory] = useState<HistoryItem[]>([]); const [editingId, setEditingId] = useState<string | null>(null);
   const [followUpForm, setFollowUpForm] = useState({ dueDate: new Date().toISOString().slice(0, 10), type: 'EMAIL', notes: '', applicationId: '' });
@@ -61,8 +101,14 @@ function App() {
   async function loadDashboard() {
     setLoading(true);
     try {
-      const [nextDashboard, applicationPage] = await Promise.all([api('/dashboard'), api('/applications?size=8')]);
-      setDashboard(nextDashboard); setApplications(applicationPage.content);
+      const [nextDashboard, applicationPage, nextProfile] = await Promise.all([
+        api('/dashboard'),
+        api('/applications?size=8'),
+        api('/profile').catch(() => null),
+      ]);
+      setDashboard(nextDashboard);
+      setApplications(applicationPage.content);
+      if (nextProfile) setProfile(nextProfile);
       const [nextFollowUps, nextInterviews, nextNotifications] = await Promise.all([api('/follow-ups'), api('/interviews'), api('/notifications')]);
       setFollowUps(nextFollowUps); setInterviews(nextInterviews); setNotifications(nextNotifications);
     } finally { setLoading(false); }
@@ -138,6 +184,22 @@ function App() {
   async function addInterview(event: React.FormEvent) { event.preventDefault(); setSaving(true); try { await api('/interviews', { method: 'POST', body: JSON.stringify({ ...interviewForm, scheduledAt: new Date(interviewForm.scheduledAt).toISOString(), applicationId: interviewForm.applicationId || null }) }); setInterviews(await api('/interviews')); setInterviewForm({ ...interviewForm, scheduledAt: '', roundName: '', meetingLink: '', notes: '', applicationId: '' }); await loadDashboard(); } catch (reason) { setError((reason as Error).message); } finally { setSaving(false); } }
   async function cancelInterview(id: string) { try { await api(`/interviews/${id}/cancel`, { method: 'PATCH' }); setInterviews(await api('/interviews')); await loadDashboard(); } catch (reason) { setError((reason as Error).message); } }
 
+  async function saveProfile(data: Partial<Profile>) {
+    setProfileSaving(true);
+    setError('');
+    setProfileSuccess('');
+    try {
+      const res = await api('/profile', { method: 'PUT', body: JSON.stringify(data) });
+      setProfile(res);
+      setProfileSuccess('Profile updated successfully!');
+      setTimeout(() => setProfileSuccess(''), 4000);
+    } catch (reason: any) {
+      setError(reason.message || 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   if (!logged) {
     return (
       <main className="auth">
@@ -205,17 +267,538 @@ function App() {
     );
   }
 
-  const navItems: [string, React.ComponentType<{ size?: number }>][] = [['Overview', LayoutDashboard], ['Applications', BriefcaseBusiness], ['Follow-ups', CheckCircle2], ['Interviews', CalendarDays], ['Analytics', BarChart3]];
-  return <div className="shell"><aside><div className="brand"><span>AF</span><strong>ApplyFlow</strong></div><p className="workspace-label">YOUR WORKSPACE</p><nav>{navItems.map(([item, Icon]) => <button key={item} className={section === item ? 'active' : ''} onClick={() => { setSection(item); setError(''); }}><Icon size={17} />{item}</button>)}</nav><div className="sidebar-footer"><div className="profile"><UserRound size={16} /><span>Personal workspace</span></div><button className="logout" onClick={() => { localStorage.removeItem('applyflow_token'); setLogged(false); }}><LogOut size={16} />Log out</button></div></aside>
-    <main className="content"><header><div><p className="eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</p><h1>Your job search, in focus.</h1><p className="muted">Track opportunities, stay ready, and follow up at the right time.</p></div><button onClick={() => { setSection('Applications'); setError(''); setShowForm(true); }}><Plus size={17} /> Add application</button></header>
-      {error && <div className="error">{error}</div>}{loading && <div className="loading"><span className="spinner" />Loading your workspace…</div>}{notifications.length > 0 && <section className="notifications">{notifications.map((notification) => <div className="notification" key={notification.id}><span>{notification.message}</span><button className="secondary" onClick={() => readNotification(notification.id)}>Mark read</button></div>)}</section>}
-      {section === 'Applications' && showForm && <ApplicationFormPanel form={form} setForm={setForm} saving={saving} editingId={editingId} onSubmit={addApplication} onCancel={() => { setShowForm(false); setEditingId(null); setForm(emptyForm()); }} />}
-      {dashboard && section === 'Overview' && <><section className="metrics"><Metric label="Total applications" value={dashboard.totalApplications} accent="blue" /><Metric label="Added this month" value={dashboard.last30Days} accent="green" /><Metric label="Upcoming interviews" value={dashboard.upcomingInterviews} accent="orange" /><Metric label="Follow-ups due" value={dashboard.overdueFollowUps} accent="red" /></section>{dashboard.totalApplications === 0 ? <EmptyOverview onAdd={() => { setSection('Applications'); setShowForm(true); }} /> : <section className="grid"><ApplicationPanel applications={applications} onEdit={editApplication} onDelete={deleteApplication} onHistory={viewHistory} onExport={exportApplications} /><PipelinePanel dashboard={dashboard} /></section>}</>}
-      {section === 'Applications' && <ApplicationPanel applications={applications} onEdit={editApplication} onDelete={deleteApplication} onHistory={viewHistory} onExport={exportApplications} />}{section === 'Analytics' && dashboard && <PipelinePanel dashboard={dashboard} />}
-      {section === 'Follow-ups' && <FollowUpPanel applications={applications} followUps={followUps} form={followUpForm} setForm={setFollowUpForm} saving={saving} onSubmit={addFollowUp} onComplete={completeFollowUp} />}
-      {section === 'Interviews' && <InterviewPanel applications={applications} interviews={interviews} form={interviewForm} setForm={setInterviewForm} saving={saving} onSubmit={addInterview} onCancel={cancelInterview} />}
-      {history.length > 0 && <section className="panel history-panel"><div className="panel-head"><h2>Status history</h2><button className="secondary" onClick={() => setHistory([])}>Close</button></div>{history.map((item) => <div className="row" key={item.id}><div className="job"><strong>{item.previousStatus ? `${label(item.previousStatus)} → ` : 'Created → '}{label(item.newStatus)}</strong><span>{new Date(item.changedAt).toLocaleString()}{item.note ? ` · ${item.note}` : ''}</span></div></div>)}</section>}
-    </main></div>;
+  const navItems: [string, React.ComponentType<{ size?: number }>][] = [
+    ['Overview', LayoutDashboard],
+    ['Applications', BriefcaseBusiness],
+    ['Follow-ups', CheckCircle2],
+    ['Interviews', CalendarDays],
+    ['Analytics', BarChart3],
+    ['Profile', UserRound],
+  ];
+
+  const candidateInitials = (profile?.name || 'AF')
+    .split(' ')
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return (
+    <div className="shell">
+      <aside>
+        <div className="brand">
+          <span>AF</span>
+          <strong>ApplyFlow</strong>
+        </div>
+        <p className="workspace-label">YOUR WORKSPACE</p>
+        <nav>
+          {navItems.map(([item, Icon]) => (
+            <button
+              key={item}
+              className={section === item ? 'active' : ''}
+              onClick={() => {
+                setSection(item);
+                setError('');
+                setProfileSuccess('');
+              }}
+            >
+              <Icon size={17} />
+              {item}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <button
+            className={`profile-badge ${section === 'Profile' ? 'active' : ''}`}
+            onClick={() => {
+              setSection('Profile');
+              setError('');
+              setProfileSuccess('');
+            }}
+          >
+            <div className="profile-avatar">{candidateInitials}</div>
+            <div className="profile-info">
+              <strong>{profile?.name || 'Candidate'}</strong>
+              <span>{profile?.targetRole || 'Personal workspace'}</span>
+            </div>
+          </button>
+          <button
+            className="logout"
+            onClick={() => {
+              localStorage.removeItem('applyflow_token');
+              setLogged(false);
+            }}
+          >
+            <LogOut size={16} />Log out
+          </button>
+        </div>
+      </aside>
+
+      <main className="content">
+        <header>
+          <div>
+            <p className="eyebrow">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}
+            </p>
+            <h1>
+              {section === 'Profile'
+                ? 'Your Career Profile'
+                : 'Your job search, in focus.'}
+            </h1>
+            <p className="muted">
+              {section === 'Profile'
+                ? 'Manage your professional identity, career targets, key skills, and online presence.'
+                : 'Track opportunities, stay ready, and follow up at the right time.'}
+            </p>
+          </div>
+          {section !== 'Profile' && (
+            <button
+              onClick={() => {
+                setSection('Applications');
+                setError('');
+                setShowForm(true);
+              }}
+            >
+              <Plus size={17} /> Add application
+            </button>
+          )}
+        </header>
+
+        {error && <div className="error">{error}</div>}
+        {loading && (
+          <div className="loading">
+            <span className="spinner" />Loading your workspace…
+          </div>
+        )}
+        {notifications.length > 0 && (
+          <section className="notifications">
+            {notifications.map((notification) => (
+              <div className="notification" key={notification.id}>
+                <span>{notification.message}</span>
+                <button className="secondary" onClick={() => readNotification(notification.id)}>
+                  Mark read
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {section === 'Applications' && showForm && (
+          <ApplicationFormPanel
+            form={form}
+            setForm={setForm}
+            saving={saving}
+            editingId={editingId}
+            onSubmit={addApplication}
+            onCancel={() => {
+              setShowForm(false);
+              setEditingId(null);
+              setForm(emptyForm());
+            }}
+          />
+        )}
+
+        {dashboard && section === 'Overview' && (
+          <>
+            <section className="metrics">
+              <Metric label="Total applications" value={dashboard.totalApplications} accent="blue" />
+              <Metric label="Added this month" value={dashboard.last30Days} accent="green" />
+              <Metric label="Upcoming interviews" value={dashboard.upcomingInterviews} accent="orange" />
+              <Metric label="Follow-ups due" value={dashboard.overdueFollowUps} accent="red" />
+            </section>
+            {dashboard.totalApplications === 0 ? (
+              <EmptyOverview
+                onAdd={() => {
+                  setSection('Applications');
+                  setShowForm(true);
+                }}
+              />
+            ) : (
+              <section className="grid">
+                <ApplicationPanel
+                  applications={applications}
+                  onEdit={editApplication}
+                  onDelete={deleteApplication}
+                  onHistory={viewHistory}
+                  onExport={exportApplications}
+                />
+                <PipelinePanel dashboard={dashboard} />
+              </section>
+            )}
+          </>
+        )}
+
+        {section === 'Applications' && (
+          <ApplicationPanel
+            applications={applications}
+            onEdit={editApplication}
+            onDelete={deleteApplication}
+            onHistory={viewHistory}
+            onExport={exportApplications}
+          />
+        )}
+
+        {section === 'Analytics' && dashboard && <PipelinePanel dashboard={dashboard} />}
+
+        {section === 'Follow-ups' && (
+          <FollowUpPanel
+            applications={applications}
+            followUps={followUps}
+            form={followUpForm}
+            setForm={setFollowUpForm}
+            saving={saving}
+            onSubmit={addFollowUp}
+            onComplete={completeFollowUp}
+          />
+        )}
+
+        {section === 'Interviews' && (
+          <InterviewPanel
+            applications={applications}
+            interviews={interviews}
+            form={interviewForm}
+            setForm={setInterviewForm}
+            saving={saving}
+            onSubmit={addInterview}
+            onCancel={cancelInterview}
+          />
+        )}
+
+        {section === 'Profile' && (
+          <ProfilePanel
+            profile={profile}
+            onSave={saveProfile}
+            saving={profileSaving}
+            success={profileSuccess}
+          />
+        )}
+
+        {history.length > 0 && (
+          <section className="panel history-panel">
+            <div className="panel-head">
+              <h2>Status history</h2>
+              <button className="secondary" onClick={() => setHistory([])}>
+                Close
+              </button>
+            </div>
+            {history.map((item) => (
+              <div className="row" key={item.id}>
+                <div className="job">
+                  <strong>
+                    {item.previousStatus ? `${label(item.previousStatus)} → ` : 'Created → '}
+                    {label(item.newStatus)}
+                  </strong>
+                  <span>
+                    {new Date(item.changedAt).toLocaleString()}
+                    {item.note ? ` · ${item.note}` : ''}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function ProfilePanel({
+  profile,
+  onSave,
+  saving,
+  success,
+}: {
+  profile: Profile | null;
+  onSave: (data: Partial<Profile>) => Promise<void>;
+  saving: boolean;
+  success: string;
+}) {
+  const [formData, setFormData] = useState<Partial<Profile>>({
+    name: profile?.name || '',
+    headline: profile?.headline || '',
+    phone: profile?.phone || '',
+    location: profile?.location || '',
+    bio: profile?.bio || '',
+    targetRole: profile?.targetRole || '',
+    targetSalary: profile?.targetSalary || '',
+    experienceYears: profile?.experienceYears ?? undefined,
+    skills: profile?.skills || '',
+    linkedinUrl: profile?.linkedinUrl || '',
+    githubUrl: profile?.githubUrl || '',
+    portfolioUrl: profile?.portfolioUrl || '',
+    preferredWorkMode: profile?.preferredWorkMode || 'HYBRID',
+  });
+
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        name: profile.name || '',
+        headline: profile.headline || '',
+        phone: profile.phone || '',
+        location: profile.location || '',
+        bio: profile.bio || '',
+        targetRole: profile.targetRole || '',
+        targetSalary: profile.targetSalary || '',
+        experienceYears: profile.experienceYears ?? undefined,
+        skills: profile.skills || '',
+        linkedinUrl: profile.linkedinUrl || '',
+        githubUrl: profile.githubUrl || '',
+        portfolioUrl: profile.portfolioUrl || '',
+        preferredWorkMode: profile.preferredWorkMode || 'HYBRID',
+      });
+    }
+  }, [profile]);
+
+  const handleChange = (key: keyof Profile) => (
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const val =
+      event.target.type === 'number'
+        ? event.target.value === ''
+          ? undefined
+          : Number(event.target.value)
+        : event.target.value;
+    setFormData((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  const parsedSkills = (formData.skills || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const heroInitials = (formData.name || profile?.name || 'AF')
+    .split(' ')
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return (
+    <div>
+      <section className="profile-hero">
+        <div className="profile-hero-avatar">{heroInitials}</div>
+        <div className="profile-hero-details">
+          <h2>{formData.name || 'Your Name'}</h2>
+          <p className="profile-hero-headline">
+            {formData.headline || 'Add your professional headline (e.g. Senior Full-Stack Engineer)'}
+          </p>
+          <div className="profile-hero-tags">
+            {formData.targetRole && <span className="pill">{formData.targetRole}</span>}
+            {formData.location && <span className="pill assessment">📍 {formData.location}</span>}
+            {formData.preferredWorkMode && (
+              <span className="pill interview">💼 {label(formData.preferredWorkMode)}</span>
+            )}
+            {formData.experienceYears != null && (
+              <span className="pill">⏱️ {formData.experienceYears} yrs exp</span>
+            )}
+          </div>
+          {(formData.linkedinUrl || formData.githubUrl || formData.portfolioUrl) && (
+            <div className="profile-hero-links">
+              {formData.linkedinUrl && (
+                <a href={formData.linkedinUrl} target="_blank" rel="noreferrer">
+                  <Linkedin size={14} /> LinkedIn
+                </a>
+              )}
+              {formData.githubUrl && (
+                <a href={formData.githubUrl} target="_blank" rel="noreferrer">
+                  <Github size={14} /> GitHub
+                </a>
+              )}
+              {formData.portfolioUrl && (
+                <a href={formData.portfolioUrl} target="_blank" rel="noreferrer">
+                  <Globe size={14} /> Portfolio
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Candidate Profile & Career Preferences</h2>
+            <p className="panel-subtitle">
+              Your profile details are stored securely and used to personalize your job search workspace.
+            </p>
+          </div>
+        </div>
+
+        {success && <div className="success-banner">✓ {success}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="profile-form-grid">
+            <div className="profile-section-title">Identity & Contact</div>
+
+            <label>
+              Full Name *
+              <input
+                value={formData.name || ''}
+                onChange={handleChange('name')}
+                placeholder="e.g. Jane Doe"
+                required
+              />
+            </label>
+
+            <label>
+              Account Email
+              <input
+                value={profile?.email || ''}
+                disabled
+                title="Email is managed by your ApplyFlow account"
+                style={{ background: '#f2f4f7', cursor: 'not-allowed' }}
+              />
+            </label>
+
+            <label>
+              Phone Number
+              <input
+                value={formData.phone || ''}
+                onChange={handleChange('phone')}
+                placeholder="e.g. +1 (555) 019-2834"
+              />
+            </label>
+
+            <label>
+              Location / City
+              <input
+                value={formData.location || ''}
+                onChange={handleChange('location')}
+                placeholder="e.g. Bengaluru, India or San Francisco, CA"
+              />
+            </label>
+
+            <div className="profile-section-title">Career Targets & Preferences</div>
+
+            <label className="full-width">
+              Professional Headline
+              <input
+                value={formData.headline || ''}
+                onChange={handleChange('headline')}
+                placeholder="e.g. Full-Stack Engineer | Java, Spring Boot, React & TypeScript"
+              />
+            </label>
+
+            <label>
+              Target Job Title
+              <input
+                value={formData.targetRole || ''}
+                onChange={handleChange('targetRole')}
+                placeholder="e.g. Senior Software Engineer"
+              />
+            </label>
+
+            <label>
+              Target Salary / Compensation
+              <input
+                value={formData.targetSalary || ''}
+                onChange={handleChange('targetSalary')}
+                placeholder="e.g. ₹25 - 35 LPA or $140,000 / yr"
+              />
+            </label>
+
+            <label>
+              Preferred Work Mode
+              <select
+                value={formData.preferredWorkMode || 'HYBRID'}
+                onChange={handleChange('preferredWorkMode')}
+              >
+                <option value="REMOTE">Remote</option>
+                <option value="HYBRID">Hybrid</option>
+                <option value="ONSITE">Onsite</option>
+              </select>
+            </label>
+
+            <label>
+              Years of Experience
+              <input
+                type="number"
+                min={0}
+                max={50}
+                value={formData.experienceYears ?? ''}
+                onChange={handleChange('experienceYears')}
+                placeholder="e.g. 4"
+              />
+            </label>
+
+            <div className="profile-section-title">Professional Summary & Bio</div>
+
+            <label className="full-width">
+              About You / Elevator Pitch
+              <textarea
+                value={formData.bio || ''}
+                onChange={handleChange('bio')}
+                placeholder="Brief summary of your background, technical interests, or what makes you stand out..."
+              />
+            </label>
+
+            <div className="profile-section-title">Skills & Tech Stack</div>
+
+            <label className="full-width">
+              Skills (comma separated)
+              <input
+                value={formData.skills || ''}
+                onChange={handleChange('skills')}
+                placeholder="e.g. Java, Spring Boot, React, TypeScript, PostgreSQL, Docker, AWS"
+              />
+              {parsedSkills.length > 0 && (
+                <div className="skills-tags">
+                  {parsedSkills.map((skill, index) => (
+                    <span key={index} className="skill-tag">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </label>
+
+            <div className="profile-section-title">Online Presence & Links</div>
+
+            <label>
+              LinkedIn Profile URL
+              <input
+                type="url"
+                value={formData.linkedinUrl || ''}
+                onChange={handleChange('linkedinUrl')}
+                placeholder="https://linkedin.com/in/username"
+              />
+            </label>
+
+            <label>
+              GitHub Profile URL
+              <input
+                type="url"
+                value={formData.githubUrl || ''}
+                onChange={handleChange('githubUrl')}
+                placeholder="https://github.com/username"
+              />
+            </label>
+
+            <label className="full-width">
+              Personal Portfolio / Website URL
+              <input
+                type="url"
+                value={formData.portfolioUrl || ''}
+                onChange={handleChange('portfolioUrl')}
+                placeholder="https://yourportfolio.dev"
+              />
+            </label>
+          </div>
+
+          <button disabled={saving}>
+            <Save size={16} /> {saving ? 'Saving changes…' : 'Save Profile Changes'}
+          </button>
+        </form>
+      </section>
+    </div>
+  );
 }
 
 function ApplicationFormPanel({ form, setForm, saving, editingId, onSubmit, onCancel }: { form: ApplicationForm; setForm: React.Dispatch<React.SetStateAction<ApplicationForm>>; saving: boolean; editingId: string | null; onSubmit: (event: React.FormEvent) => void; onCancel: () => void }) {

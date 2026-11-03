@@ -21,3 +21,36 @@ record FollowUpRequest(@NotNull LocalDate dueDate,@NotNull FollowUpType type,Str
 record InterviewRequest(@NotNull Instant scheduledAt,@NotBlank String roundName,@NotNull InterviewType type,String meetingLink,String notes,UUID applicationId) {}
 record DashboardResponse(long totalApplications,long last7Days,long last30Days,Map<ApplicationStatus,Long> byStatus,long upcomingInterviews,long pendingFollowUps,long overdueFollowUps,double interviewRate,double offerRate) {}
 record ApiError(String code,String message,Map<String,String> fields,Instant timestamp) {}
+
+record ProfileRequest(
+  @NotBlank @Size(max=120) String name,
+  @Size(max=200) String headline,
+  @Size(max=50) String phone,
+  @Size(max=160) String location,
+  String bio,
+  @Size(max=160) String targetRole,
+  @Size(max=120) String targetSalary,
+  @Min(0) @Max(60) Integer experienceYears,
+  String skills,
+  @Size(max=500) String linkedinUrl,
+  @Size(max=500) String githubUrl,
+  @Size(max=500) String portfolioUrl,
+  WorkMode preferredWorkMode
+) {}
+
+record ProfileResponse(
+  UUID id, UUID userId, String name, String email, String headline, String phone, String location,
+  String bio, String targetRole, String targetSalary, Integer experienceYears, String skills,
+  String linkedinUrl, String githubUrl, String portfolioUrl, WorkMode preferredWorkMode, Instant updatedAt
+) {
+  static ProfileResponse from(User u, UserProfile p) {
+    if (p == null) {
+      return new ProfileResponse(null, u.id, u.name, u.email, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    }
+    return new ProfileResponse(
+      p.id, u.id, u.name, u.email, p.headline, p.phone, p.location, p.bio,
+      p.targetRole, p.targetSalary, p.experienceYears, p.skills,
+      p.linkedinUrl, p.githubUrl, p.portfolioUrl, p.preferredWorkMode, p.updatedAt
+    );
+  }
+}

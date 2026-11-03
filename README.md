@@ -25,8 +25,9 @@ After signing in, the user can:
 8. Schedule and cancel upcoming interviews.
 9. See unread reminder notifications.
 10. Review pipeline analytics, including interview and offer rates.
+11. Manage candidate profile: headline, target role, target compensation, skills, work mode preferences, bio, and portfolio links.
 
-The application is user-scoped: one user cannot read or modify another user's applications, follow-ups, interviews, or notifications.
+The application is user-scoped: one user cannot read or modify another user's profile, applications, follow-ups, interviews, or notifications.
 
 ## Live deployment: free-tier architecture
 

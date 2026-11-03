@@ -44,3 +44,43 @@ class ReminderScheduler {
   ReminderScheduler(FollowUpRepository f,NotificationRepository n){follows=f;notifications=n;}
   @Scheduled(cron="${app.reminders.cron:0 0 9 * * *}") @Transactional void createDueReminders(){for(var f:follows.findByDueDateLessThanEqualAndCompletedFalse(LocalDate.now()))if(!notifications.existsByFollowUpId(f.id)){var n=new Notification();n.id=UUID.randomUUID();n.user=f.user;n.followUp=f;n.message="Follow-up due: "+f.type;n.createdAt=Instant.now();notifications.save(n);}}
 }
+
+@Service
+class ProfileService {
+  private final UserRepository users;
+  private final ProfileRepository profiles;
+  ProfileService(UserRepository u, ProfileRepository p) { users = u; profiles = p; }
+
+  @Transactional(readOnly = true)
+  ProfileResponse get() {
+    UUID userId = CurrentUser.id();
+    User u = users.findById(userId).orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "User not found"));
+    UserProfile p = profiles.findByUserId(userId).orElse(null);
+    return ProfileResponse.from(u, p);
+  }
+
+  @Transactional
+  ProfileResponse update(ProfileRequest r) {
+    UUID userId = CurrentUser.id();
+    User u = users.findById(userId).orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "User not found"));
+    if (r.name() != null && !r.name().trim().isBlank()) {
+      u.name = r.name().trim();
+      users.save(u);
+    }
+    UserProfile p = profiles.findByUserId(userId).orElseGet(() -> new UserProfile(u));
+    p.headline = r.headline() != null ? r.headline().trim() : null;
+    p.phone = r.phone() != null ? r.phone().trim() : null;
+    p.location = r.location() != null ? r.location().trim() : null;
+    p.bio = r.bio() != null ? r.bio().trim() : null;
+    p.targetRole = r.targetRole() != null ? r.targetRole().trim() : null;
+    p.targetSalary = r.targetSalary() != null ? r.targetSalary().trim() : null;
+    p.experienceYears = r.experienceYears();
+    p.skills = r.skills() != null ? r.skills().trim() : null;
+    p.linkedinUrl = r.linkedinUrl() != null ? r.linkedinUrl().trim() : null;
+    p.githubUrl = r.githubUrl() != null ? r.githubUrl().trim() : null;
+    p.portfolioUrl = r.portfolioUrl() != null ? r.portfolioUrl().trim() : null;
+    p.preferredWorkMode = r.preferredWorkMode();
+    p.updatedAt = Instant.now();
+    return ProfileResponse.from(u, profiles.save(p));
+  }
+}
